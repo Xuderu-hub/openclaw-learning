@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenClaw 架构详解 - 完整知识体系</title>
+<script>
+function scrollTo(id) {
+  document.getElementById(id).scrollIntoView({behavior: 'smooth'});
+}
+</script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { font-family: 'PingFang SC', 'Microsoft YaHei', -apple-system, sans-serif; background: #0d0d1a; color: #e0e0e0; overflow-x: hidden; }
+
+/* 导航 */
+nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  background: rgba(13,13,26,0.97);
+  backdrop-filter: blur(20px);
+  padding: 12px 40px;
+  display: flex; justify-content: space-between; align-items: center;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(0,212,255,0.08);
+}
+nav .logo { font-size: 1.1em; font-weight: bold; color: #00d4ff; letter-spacing: 1px; }
+nav .nav-links { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+nav .nav-links a {
+  color: #555; text-decoration: none;
+  padding: 5px 12px; border-radius: 15px;
+  font-size: 0.8em; transition: all 0.3s;
+}
+nav .nav-links a:hover { color: #00d4ff; background: rgba(0,212,255,0.08); }
+nav .nav-links a.active { color: #fff; background: rgba(0,212,255,0.15); }
+
+/* 幻灯片 */
+.slide {
+  min-height: 100vh;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: center;
+  padding: 90px 60px 80px;
+  position: relative; overflow: hidden;
+}
+.slide::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 30% 40%, rgba(0,212,255,0.03) 0%, transparent 50%),
+              radial-gradient(circle at 70% 70%, rgba(123,47,255,0.03) 0%, transparent 40%);
+  pointer-events: none;
+}
+.grid-bg {
+  position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(0,212,255,0.015) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,212,255,0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+
+/* 标题页 */
+.slide-cover {
+  justify-content: center;
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3e 50%, #0f0f2f 100%);
+}
+.slide-cover h1 {
+  font-size: 4.5em;
+  background: linear-gradient(135deg, #00d4ff, #7b2fff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 25px; position: relative; z-index: 1;
+}
+.slide-cover .subtitle { font-size: 1.3em; color: #777; margin-bottom: 40px; position: relative; z-index: 1; }
+.slide-cover .parts { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
+.part-tag {
+  background: rgba(0,212,255,0.08); border: 1px solid rgba(0,212,255,0.25);
+  padding: 7px 18px; border-radius: 20px;
+  font-size: 0.85em; color: #00d4ff;
+  text-decoration: none;
+  transition: all 0.3s;
+  cursor: pointer;
+  display: inline-block;
+}
+.part-tag:hover { background: rgba(0,212,255,0.2); transform: translateY(-2px); }
+.scroll-hint {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,0.15); font-size: 0.8em;
+  animation: bounce 2.5s infinite;
+}
+@keyframes bounce { 0%,100%{transform:translateX(-50%) translateY(0)} 50%{transform:translateX(-50%) translateY(8px)} }
+
+/* 章节标题 */
+h2 {
+  font-size: 2.2em; color: #fff; margin-bottom: 35px;
+  position: relative; z-index: 1; text-align: center;
+}
+h2 .chapter {
+  font-size: 0.3em; color: #00d4ff; display: block;
+  letter-spacing: 5px; margin-bottom: 8px; font-weight: normal;
+}
+.content { max-width: 1100px; width: 100%; position: relative; z-index: 1; }
+
+/* 网格 */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+
+/* 卡片 */
+.card {
+  background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 14px; padding: 22px;
+  transition: all 0.3s;
+}
+.card:hover { transform: translateY(-3px); border-color: rgba(0,212,255,0.25); box-shadow: 0 15px 40px rgba(0,0,0,0.25); }
+.card h3 { color: #00d4ff; font-size: 1em; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.card h3 .icon { font-size: 1.2em; }
+.card p, .card li { color: #999; line-height: 1.85; font-size: 0.92em; }
+.card ul { list-style: none; padding: 0; margin: 0; }
+.card li { padding: 3px 0; padding-left: 16px; position: relative; }
+.card li::before { content: '›'; position: absolute; left: 0; color: #00d4ff; }
+.card .note { color: #555; font-size: 0.85em; margin-top: 10px; font-style: italic; }
+
+/* 流程 */
+.flow { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 25px 0; flex-wrap: wrap; }
+.flow-item {
+  background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.12);
+  border-radius: 10px; padding: 14px 22px; text-align: center; min-width: 90px;
+}
+.flow-item .icon { font-size: 1.6em; margin-bottom: 4px; }
+.flow-item .name { color: #00d4ff; font-weight: bold; font-size: 0.85em; }
+.flow-item .desc { color: #666; font-size: 0.7em; margin-top: 2px; }
+.flow-arrow { color: #2a2a3a; font-size: 1.3em; }
+
+/* 标签 */
+.tag { display: inline-block; background: rgba(0,212,255,0.08); color: #00d4ff; padding: 2px 9px; border-radius: 4px; font-size: 0.75em; margin-right: 4px; }
+.tag-p { background: rgba(123,47,255,0.08); color: #7b2fff; }
+
+/* 高亮 */
+.hl { color: #00d4ff; font-weight: bold; }
+.hl-p { color: #7b2fff; font-weight: bold; }
+
+/* 时间线 */
+.timeline { position: relative; padding-left: 28px; margin-top: 15px; }
+.timeline::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, #00d4ff, #7b2fff); border-radius: 1px; }
+.timeline-item { position: relative; padding: 12px 0; padding-left: 22px; }
+.timeline-item::before { content: ''; position: absolute; left: -31px; top: 17px; width: 8px; height: 8px; border-radius: 50%; background: #00d4ff; box-shadow: 0 0 8px rgba(0,212,255,0.4); }
+.timeline-item h4 { color: #ddd; font-size: 0.95em; margin-bottom: 4px; }
+.timeline-item p { color: #666; font-size: 0.82em; }
+.timeline-item .detail { color: #888; font-size: 0.8em; margin-top: 3px; }
+
+/* 图层 */
+.layer { display: flex; align-items: flex-start; gap: 20px; padding: 18px; border-radius: 12px; margin: 8px 0; }
+.layer-gw { background: rgba(0,212,255,0.06); border-left: 3px solid #00d4ff; }
+.layer-ag { background: rgba(123,47,255,0.06); border-left: 3px solid #7b2fff; }
+.layer-sk { background: rgba(0,212,255,0.03); border-left: 3px solid #4a9eff; }
+.layer-name { font-size: 1.1em; font-weight: bold; min-width: 90px; padding-top: 3px; }
+.layer-gw .layer-name { color: #00d4ff; }
+.layer-ag .layer-name { color: #7b2fff; }
+.layer-sk .layer-name { color: #4a9eff; }
+.layer-info .layer-title { color: #ddd; font-size: 0.9em; margin-bottom: 5px; }
+.layer-info .layer-desc { color: #777; font-size: 0.82em; }
+.layer-items { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.layer-item { background: rgba(255,255,255,0.04); padding: 3px 10px; border-radius: 4px; font-size: 0.75em; color: #999; }
+
+/* 动画 */
+.fade-in { animation: fadeIn 0.6s ease both; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(15px)} to{opacity:1;transform:translateY(0)} }
+
+/* 分隔线 */
+.divider { border: none; border-top: 1px solid rgba(255,255,255,0.04); margin: 20px 0; }
+
+/* 页码 */
+.page-num { position: fixed; bottom: 22px; right: 35px; color: rgba(255,255,255,0.12); font-size: 0.75em; z-index: 100; }
+
+/* 响应式 */
+@media (max-width: 900px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  nav { padding: 10px 15px; }
+  nav .nav-links { display: none; }
+  .slide { padding: 80px 20px 50px; }
+  h2 { font-size: 1.7em; }
+  .slide-cover h1 { font-size: 2.5em; }
+  .flow { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); }
+}
+</style>
+</head>
+<body>
+
+<!-- 导航 -->
+<nav>
+  <div class="logo">OpenClaw</div>
+  <div class="nav-links">
+    <a href="https://v.douyin.com/-kpioabg8k8/" target="_blank" style="color:#fe2c55;">👤 抖音主页</a>
+    <a href="#cover">概述</a>
+    <a href="#s-gateway">Gateway</a>
+    <a href="#s-session">Session</a>
+    <a href="#s-agent">Agent</a>
+    <a href="#s-memory">Memory</a>
+    <a href="#s-skills">Skills</a>
+    <a href="#s-cron">Cron</a>
+    <a href="#s-tools">Tools</a>
+    <a href="#s-summary">总览</a>
+  </div>
+</nav>
+
+<!-- 封面 -->
+<section id="cover" class="slide slide-cover">
+  <div class="grid-bg"></div>
+  <h1>OpenClaw 架构详解</h1>
+  <div class="subtitle">从零理解一个 AI 助手是如何工作的 · 完整知识体系</div>
+  <div class="parts">
+    <a href="#s-gateway" class="part-tag">Gateway</a>
+    <a href="#s-session" class="part-tag">Session</a>
+    <a href="#s-agent" class="part-tag">Agent</a>
+    <a href="#s-memory" class="part-tag">Memory</a>
+    <a href="#s-skills" class="part-tag">Skills</a>
+    <a href="#s-cron" class="part-tag">Cron</a>
+    <a href="#s-tools" class="part-tag">Tools</a>
+    <a href="#s-summary" class="part-tag">总览</a>
+  </div>
+</section>
+
+<!-- Gateway -->
+<section id="s-gateway" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 01</span>Gateway — 交通枢纽</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;">
+      <h3><span class="icon">🏢</span> Gateway 在架构中的位置</h3>
+      <p>Gateway是OpenClaw的入口层，所有外部消息都经过它。它不做任何"思考"，只做三件事：<span class="hl">接收 → 路由 → 转发</span>。</p>
+      <p class="note">类比：酒店前台 — 接电话、转接、挂电话。它不处理业务，只做分发。</p>
+    </div>
+    
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3><span class="icon">📥</span> 1. 接收消息</h3>
+        <p>接收来自各个渠道的消息：QQ消息、微信消息、网页聊天、Telegram等。不解析内容，只管"收"。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🛤️</span> 2. 路由分发</h3>
+        <p>根据消息携带的Session ID，找到对应的Agent和上下文，把消息送过去处理。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📤</span> 3. 结果返回</h3>
+        <p>Agent处理完毕后，Gateway把生成的回复送回对应的聊天通道（QQ/微信/网页等）。</p>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:1em;margin:15px 0 12px;" class="fade-in">🔄 消息完整流转路径</h3>
+    <div class="flow fade-in">
+      <div class="flow-item"><div class="icon">👤</div><div class="name">用户</div><div class="desc">发消息</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item"><div class="icon">💬</div><div class="name">QQ/微信</div><div class="desc">网页</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item" style="border-color:#00d4ff;background:rgba(0,212,255,0.1);">
+        <div class="icon">🏧</div><div class="name">Gateway</div><div class="desc">接收+路由</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.1);">
+        <div class="icon">🤖</div><div class="name">Agent</div><div class="desc">理解+决策</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item" style="border-color:#00d4ff;background:rgba(0,212,255,0.1);">
+        <div class="icon">🏧</div><div class="name">Gateway</div><div class="desc">返回结果</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-item"><div class="icon">👤</div><div class="name">用户</div><div class="desc">收到回复</div></div>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="grid-2 fade-in">
+      <div>
+        <h3 style="color:#ddd;font-size:0.95em;margin-bottom:10px;">⏰ Session 管理</h3>
+        <div class="card">
+          <ul>
+            <li>每个聊天会话 = 一个<span class="hl">独立Session</span></li>
+            <li>Session记录：对话历史、用户信息、当前上下文</li>
+            <li>不同渠道的Session完全隔离，互不干扰</li>
+            <li>Session通过<span class="hl">Session ID</span>唯一标识</li>
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h3 style="color:#ddd;font-size:0.95em;margin-bottom:10px;">⏰ Cron 调度</h3>
+        <div class="card">
+          <ul>
+            <li>Gateway内置<span class="hl">Cron调度器</span></li>
+            <li>到了预设时间，自动触发任务（不依赖用户消息）</li>
+            <li>触发后生成一个内部事件，交给Agent执行</li>
+            <li>你的每日热点推送就是这样自动跑的</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">01 / 09</div>
+</section>
+
+<!-- Session -->
+<section id="s-session" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 02</span>Session — 对话房间</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;">
+      <h3><span class="icon">🚪</span> 什么是Session？</h3>
+      <p>Session = 对话房间。每个和你对话的渠道，都有一个独立的Session，拥有独立的上下文和记忆。</p>
+    </div>
+    
+    <div class="flow fade-in">
+      <div class="flow-item"><div class="icon">💬</div><div class="name">QQ</div><div class="desc">Session-A</div></div>
+      <div class="flow-item"><div class="icon">💬</div><div class="name">微信</div><div class="desc">Session-B</div></div>
+      <div class="flow-item"><div class="icon">🌐</div><div class="name">网页</div><div class="desc">Session-C</div></div>
+      <div class="flow-item"><div class="icon">📱</div><div class="name">Telegram</div><div class="desc">Session-D</div></div>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="grid-2 fade-in">
+      <div class="card">
+        <h3><span class="icon">🔒</span> 上下文隔离</h3>
+        <ul>
+          <li>你在QQ问的事情，<span class="hl">不会影响</span>网页的对话内容</li>
+          <li>每个Session有自己独立的"记忆"</li>
+          <li>切换渠道时，上下文不会丢失也不会串台</li>
+          <li>Session销毁后，对话历史也随之清除</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🔑</span> Session ID 的作用</h3>
+        <ul>
+          <li>每条消息都携带<span class="hl">Session ID</span></li>
+          <li>Gateway根据ID找到对应的Session</li>
+          <li>Session里保存了：对话历史、用户信息、配置参数</li>
+          <li>ID是唯一的，格式类似 <code style="color:#555;font-size:0.8em;">session-xxx-xxx</code></li>
+        </ul>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="card fade-in">
+      <h3><span class="icon">🗂️</span> Session 存储什么？</h3>
+      <div class="grid-3" style="margin-top:12px;">
+        <div>
+          <span class="tag">对话历史</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">你和AI之间的所有消息记录</p>
+        </div>
+        <div>
+          <span class="tag">用户信息</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">用户名、ID、渠道标识</p>
+        </div>
+        <div>
+          <span class="tag">运行时状态</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">当前模型、工具配置等</p>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">02 / 09</div>
+</section>
+
+<!-- Agent -->
+<section id="s-agent" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 03</span>Agent — 理解与决策</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;border-color:rgba(123,47,255,0.2);">
+      <h3><span class="icon">🤖</span> Agent 是 OpenClaw 的"大脑"</h3>
+      <p>Gateway只管转发，Agent才是真正<span class="hl-p">"思考"</span>的地方。它理解你的意思，决定做什么，选择合适的工具，然后生成回复。</p>
+    </div>
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">⚙️ Agent 的四大职责</h3>
+    <div class="grid-4 fade-in">
+      <div class="card">
+        <h3><span class="icon">🔍</span> 意图理解</h3>
+        <p>理解你真正想问什么，而不只是字面。同一句话在不同上下文里意思不同。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">⚙️</span> 工具选择</h3>
+        <p>决定是否调用工具、调哪个工具。Agent知道每个Skill能做什么。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📚</span> 上下文管理</h3>
+        <p>从Session中读取历史消息，向Memory请求相关记忆，保持对话连贯性。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">💬</span> 回复生成</h3>
+        <p>综合所有信息（工具结果+上下文+记忆），用自然语言生成最终回复。</p>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">🔄 Agent 处理消息的完整流程</h3>
+    <div class="card fade-in">
+      <div class="flow" style="margin:20px 0 25px;">
+        <div class="flow-item"><div class="icon">💬</div><div class="name">收到消息</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">🧠</div><div class="name" style="color:#7b2fff;">理解语义</div><div class="desc">在上下文中理解意图</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">🔌</div><div class="name" style="color:#7b2fff;">决策</div><div class="desc">要不要调用工具？</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#4a9eff;background:rgba(74,158,255,0.08);"><div class="icon">🔧</div><div class="name" style="color:#4a9eff;">调用Skill</div><div class="desc">执行工具获取结果</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">💬</div><div class="name" style="color:#7b2fff;">生成回复</div><div class="desc">综合结果组织语言</div></div>
+      </div>
+      <p class="note" style="text-align:center;">整个过程在毫秒级完成，用户感知不到延迟</p>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="grid-2 fade-in">
+      <div class="card">
+        <h3><span class="icon">📖</span> 上下文（Context）</h3>
+        <ul>
+          <li>当前Session的<span class="hl">对话历史</span>（最近N轮消息）</li>
+          <li>System Prompt（AI的角色设定）</li>
+          <li>Skill返回的结果</li>
+          <li>Memory返回的相关记忆</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🎯</span> Tool/Skill 选择机制</h3>
+        <ul>
+          <li>每个Skill都有<span class="hl">描述</span>（SKILL.md里定义）</li>
+          <li>Agent根据任务需求<span class="hl">匹配合适的Skill</span></li>
+          <li>必要时串联多个Skill完成复杂任务</li>
+          <li>Skill结果再交回Agent组织最终回复</li>
+        </ul>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">03 / 09</div>
+</section>
+
+<!-- Memory -->
+<section id="s-memory" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 04</span>Memory — 记忆系统</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;border-color:rgba(123,47,255,0.2);">
+      <h3><span class="icon">🧠</span> 为什么需要Memory？</h3>
+      <p>Agent的上下文（Context）只能记住"最近几轮对话"。Memory系统让AI能够记住<span class="hl-p">更早的、重要的事情</span>，跨越会话积累知识。</p>
+    </div>
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">🏗️ 记忆分层架构</h3>
+    <div class="timeline fade-in" style="margin-bottom:25px;">
+      <div class="timeline-item">
+        <h4>Working Memory</h4>
+        <p>当前会话的上下文，随对话结束而消失</p>
+        <div class="detail">大小：有限（几千到几万个token）</div>
+      </div>
+      <div class="timeline-item">
+        <h4>Episodic Memory — 事件记忆</h4>
+        <p>memory/YYYY-MM-DD.md 每日原始记录</p>
+        <div class="detail">记录每天发生的raw事实，由Agent每日自动写入</div>
+      </div>
+      <div class="timeline-item">
+        <h4>Short-term Memory — 短期记忆</h4>
+        <p>memory/.dreams/ Dreaming暂存区</p>
+        <div class="detail">凌晨3点Dreaming运行时，临时存放待整合的记忆碎片</div>
+      </div>
+      <div class="timeline-item">
+        <h4>Long-term Memory — 长期记忆</h4>
+        <p>MEMORY.md 结构化精华</p>
+        <div class="detail">萃取后的结构化知识：用户偏好、重大决策、经验教训</div>
+      </div>
+      <div class="timeline-item">
+        <h4>Procedural Memory — 程序记忆</h4>
+        <p>memory/procedures.md 工作流模式</p>
+        <div class="detail">记录常见的操作步骤和最佳实践</div>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">🌙 Dreaming — 自动记忆整合</h3>
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3><span class="icon">⏰</span> 何时运行？</h3>
+        <p>每天凌晨 <span class="hl">3:00</span> Asia/Shanghai，自动触发</p>
+        <p class="note" style="margin-top:8px;">用户睡觉时，AI也在工作</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🔄</span> 三阶段流程</h3>
+        <ul>
+          <li><span class="tag">Light</span> 轻量整理</li>
+          <li><span class="tag">REM</span> 深度整合</li>
+          <li><span class="tag">Deep</span> 精华萃取</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📊</span> 六维评分</h3>
+        <ul>
+          <li>相关性 <span style="color:#555;font-size:0.8em;">0.30</span></li>
+          <li>频率 <span style="color:#555;font-size:0.8em;">0.24</span></li>
+          <li>查询多样性 <span style="color:#555;font-size:0.8em;">0.15</span></li>
+          <li>时效性 <span style="color:#555;font-size:0.8em;">0.15</span></li>
+          <li>整合度 <span style="color:#555;font-size:0.8em;">0.10</span></li>
+          <li>概念丰富度 <span style="color:#555;font-size:0.8em;">0.06</span></li>
+        </ul>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="card fade-in">
+      <h3><span class="icon">🔬</span> Dreaming 的工作原理</h3>
+      <div class="grid-2" style="margin-top:12px;">
+        <div>
+          <ul>
+            <li>读取 <span class="hl">memory/</span> 下的每日笔记</li>
+            <li>读取 <span class="hl">MEMORY.md</span> 现有长期记忆</li>
+            <li>分析哪些记忆值得保留、哪些可以合并</li>
+          </ul>
+        </div>
+        <div>
+          <ul>
+            <li>Rehydration（再水化）确保不固化过时内容</li>
+            <li>评分低的记忆被淘汰或归档</li>
+            <li>新的重要信息写入MEMORY.md</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">04 / 09</div>
+</section>
+
+<!-- Skills -->
+<section id="s-skills" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 05</span>Skills — 可插拔技能</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;">
+      <h3><span class="icon">🔌</span> Skills 的核心设计思想</h3>
+      <div class="grid-3" style="margin-top:12px;">
+        <div>
+          <span class="tag">单一职责</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">每个Skill只做一件事，做好为止</p>
+        </div>
+        <div>
+          <span class="tag">可组合</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">多个Skills可以串联使用，完成复杂任务</p>
+        </div>
+        <div>
+          <span class="tag">声明式</span>
+          <p style="font-size:0.85em;margin-top:5px;color:#777;">SKILL.md描述能力，Agent按需调用</p>
+        </div>
+      </div>
+    </div>
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">📁 Skill 文件结构</h3>
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3><span class="icon">📄</span> SKILL.md</h3>
+        <p>核心定义文件。包含：Skill名称、描述、适用场景、调用方式、使用示例。</p>
+        <p class="note">Agent通过读取这个文件来了解"这个Skill能做什么"</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📂</span> scripts/</h3>
+        <p>实际执行的脚本。可以是Python、JavaScript、Shell、PowerShell等。</p>
+        <p class="note">真正干活的地方</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📚</span> references/</h3>
+        <p>参考资料、文档、数据文件。供scripts运行时读取使用。</p>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">⚙️ Skills 如何工作</h3>
+    <div class="card fade-in">
+      <div class="flow" style="margin:20px 0;">
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">🧠</div><div class="name" style="color:#7b2fff;">Agent决策</div><div class="desc">判断需要调用Skill</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">📄</div><div class="name">读取SKILL.md</div><div class="desc">了解能力边界</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">⚙️</div><div class="name">执行脚本</div><div class="desc">scripts/*.py等</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">📤</div><div class="name">返回结果</div><div class="desc">给Agent组织回复</div></div>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">📦 已安装的Skills</h3>
+    <div class="card fade-in">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px;">
+        <span class="tag">daily-trend-monitor</span>
+        <span class="tag">douyin-hot-trend</span>
+        <span class="tag">weather</span>
+        <span class="tag">win-mouse-native</span>
+        <span class="tag">windows-ui-automation</span>
+        <span class="tag">news-aggregator</span>
+        <span class="tag">video-frames</span>
+        <span class="tag">mm-music-expert</span>
+        <span class="tag-p tag">clawhub</span>
+        <span class="tag-p tag">skill-creator</span>
+        <span class="tag">find-skills</span>
+        <span class="tag">self-improving-agent</span>
+      </div>
+      <p class="note">可在 ClawHub (clawhub.ai) 发现和安装更多Skills</p>
+    </div>
+    
+  </div>
+  <div class="page-num">05 / 09</div>
+</section>
+
+<!-- Cron -->
+<section id="s-cron" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 06</span>Cron — 定时任务</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;">
+      <h3><span class="icon">⏱️</span> 什么是Cron？</h3>
+      <p>Cron是Gateway内置的<span class="hl">定时任务调度器</span>。你可以把它理解为"闹钟"——到了预设的时间，自动触发一段代码执行，不需要你手动操作。</p>
+    </div>
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">⚙️ Cron 核心配置项</h3>
+    <div class="grid-2 fade-in">
+      <div class="card">
+        <h3><span class="icon">📅</span> schedule</h3>
+        <p>何时执行。使用<span class="hl">cron表达式</span>定义时间规则。</p>
+        <ul style="margin-top:8px;">
+          <li><code style="color:#888;font-size:0.85em;">0 9 * * *</code> = 每天9:00</li>
+          <li><code style="color:#888;font-size:0.85em;">0 3 * * *</code> = 每天3:00</li>
+          <li><code style="color:#888;font-size:0.85em;">*/30 * * * *</code> = 每30分钟</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📦</span> payload</h3>
+        <p>执行什么内容。</p>
+        <ul style="margin-top:8px;">
+          <li><span class="tag">systemEvent</span> 发送系统事件</li>
+          <li><span class="tag">agentTurn</span> 启动Agent执行任务</li>
+        </ul>
+      </div>
+    </div>
+    <div class="grid-2 fade-in" style="margin-top:15px;">
+      <div class="card">
+        <h3><span class="icon">🎯</span> sessionTarget</h3>
+        <p>在哪里执行。</p>
+        <ul style="margin-top:8px;">
+          <li><span class="tag">main</span> 主会话</li>
+          <li><span class="tag">isolated</span> 独立会话（推荐）</li>
+          <li><span class="tag">current</span> 当前会话</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">📢</span> delivery</h3>
+        <p>如何返回结果。</p>
+        <ul style="margin-top:8px;">
+          <li><span class="tag">announce</span> 推送通知给用户</li>
+          <li><span class="tag">webhook</span> POST到指定URL</li>
+          <li><span class="tag">none</span> 不推送</li>
+        </ul>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">🔄 定时任务完整流程</h3>
+    <div class="card fade-in">
+      <div class="flow" style="margin:20px 0;">
+        <div class="flow-item"><div class="icon">⏰</div><div class="name">时间到达</div><div class="desc">cron表达式匹配</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#00d4ff;background:rgba(0,212,255,0.08);"><div class="icon">🏧</div><div class="name">Gateway</div><div class="desc">Cron调度器触发</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">🤖</div><div class="name" style="color:#7b2fff;">Agent</div><div class="desc">执行payload内容</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">📤</div><div class="name">delivery</div><div class="desc">推送结果给用户</div></div>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3><span class="icon">📰</span> 每日热点推送</h3>
+        <p>每天 <span class="hl">9:00</span> 自动抓取抖音、微博热搜，整理后推送给用户。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🌙</span> Dreaming</h3>
+        <p>每天 <span class="hl">3:00</span> 自动运行记忆整合系统，优化长期记忆。</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🔧</span> 自定义任务</h3>
+        <p>用户可添加任意定时任务：备份文件、检查服务、发送提醒等。</p>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">06 / 09</div>
+</section>
+
+<!-- Tools -->
+<section id="s-tools" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">CHAPTER 07</span>Tools — 工具系统</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:20px;">
+      <h3><span class="icon">🔧</span> Tools vs Skills</h3>
+      <p><span class="hl">Tools</span>是OpenClaw内置的基础能力接口（文件操作、网络请求等）。<span class="hl-p">Skills</span>是封装好的完整技能包（调用Tools、执行业务逻辑）。Skills底层依赖Tools工作。</p>
+    </div>
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">🛠️ 常用Tools一览</h3>
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3><span class="icon">📁</span> 文件操作</h3>
+        <ul>
+          <li><span class="hl">read</span> — 读取文件</li>
+          <li><span class="hl">write</span> — 写入文件</li>
+          <li><span class="hl">edit</span> — 编辑文件</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">💻</span> 命令执行</h3>
+        <ul>
+          <li><span class="hl">exec</span> — 执行Shell命令</li>
+          <li><span class="hl">process</span> — 管理运行中的进程</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🌐</span> 网络</h3>
+        <ul>
+          <li><span class="hl">web_fetch</span> — 获取网页内容</li>
+          <li><span class="hl">web_search</span> — DuckDuckGo搜索</li>
+          <li><span class="hl">MiniMax__web_search</span> — MiniMax搜索</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">💬</span> 消息</h3>
+        <ul>
+          <li><span class="hl">sessions_send</span> — 跨会话发消息</li>
+          <li><span class="hl">sessions_spawn</span> — 启动子会话</li>
+          <li><span class="hl">cron</span> — 定时任务管理</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🖼️</span> 媒体生成</h3>
+        <ul>
+          <li><span class="hl">image_generate</span> — 生成图片</li>
+          <li><span class="hl">video_generate</span> — 生成视频</li>
+          <li><span class="hl">music_generate</span> — 生成音乐</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🤖</span> AI能力</h3>
+        <ul>
+          <li><span class="hl">MiniMax__understand_image</span> — 图片理解</li>
+          <li><span class="hl">image</span> — 视觉分析</li>
+        </ul>
+      </div>
+    </div>
+    
+    <hr class="divider">
+    
+    <h3 style="color:#ddd;font-size:0.95em;margin-bottom:12px;" class="fade-in">⚡ Tool 调用流程</h3>
+    <div class="card fade-in">
+      <div class="flow" style="margin:20px 0;">
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">🧠</div><div class="name" style="color:#7b2fff;">Agent决策</div><div class="desc">判断需要调用Tool</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">📝</div><div class="name">准备参数</div><div class="desc">组织Tool入参</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item"><div class="icon">⚙️</div><div class="name">执行</div><div class="desc">Tool完成操作</div></div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-item" style="border-color:#7b2fff;background:rgba(123,47,255,0.08);"><div class="icon">📤</div><div class="name" style="color:#7b2fff;">返回结果</div><div class="desc">Agent获取Tool输出</div></div>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">07 / 09</div>
+</section>
+
+<!-- 完整架构总览 -->
+<section id="s-summary" class="slide">
+  <div class="grid-bg"></div>
+  <h2><span class="chapter">FINAL</span>完整架构总览</h2>
+  <div class="content">
+    
+    <div class="card fade-in" style="margin-bottom:25px;text-align:center;">
+      <p style="color:#888;">消息在OpenClaw中的完整生命周期</p>
+    </div>
+    
+    <div class="layer layer-gw fade-in">
+      <div class="layer-name">Gateway</div>
+      <div class="layer-info">
+        <div class="layer-title">交通枢纽层</div>
+        <div class="layer-desc">所有消息的入口和出口，不做业务处理，只负责路由</div>
+        <div class="layer-items">
+          <span class="layer-item">消息接收</span>
+          <span class="layer-item">Session管理</span>
+          <span class="layer-item">Cron调度</span>
+          <span class="layer-item">结果返回</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;justify-content:center;color:#1a1a2a;font-size:1.2em;margin:3px 0;">↓ ↑</div>
+    
+    <div class="layer layer-ag fade-in">
+      <div class="layer-name">Agent</div>
+      <div class="layer-info">
+        <div class="layer-title">智能体层（大脑）</div>
+        <div class="layer-desc">理解语义、选择工具、管理上下文、生成回复</div>
+        <div class="layer-items">
+          <span class="layer-item">意图理解</span>
+          <span class="layer-item">Tool选择</span>
+          <span class="layer-item">上下文管理</span>
+          <span class="layer-item">Memory调用</span>
+          <span class="layer-item">回复生成</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;justify-content:center;color:#1a1a2a;font-size:1.2em;margin:3px 0;">↓ ↑</div>
+    
+    <div class="layer layer-sk fade-in">
+      <div class="layer-name">Skills</div>
+      <div class="layer-info">
+        <div class="layer-title">能力扩展层</div>
+        <div class="layer-desc">可插拔的技能包，通过Tools执行具体任务</div>
+        <div class="layer-items">
+          <span class="layer-item">热点抓取</span>
+          <span class="layer-item">天气查询</span>
+          <span class="layer-item">记忆系统</span>
+          <span class="layer-item">定时任务</span>
+          <span class="layer-item">文件处理</span>
+          <span class="layer-item">媒体生成</span>
+        </div>
+      </div>
+    </div>
+    
+    <div style="display:flex;justify-content:center;color:#1a1a2a;font-size:1.2em;margin:3px 0;">↑</div>
+    
+    <div class="card fade-in" style="text-align:center;margin-top:8px;">
+      <p style="color:#777;font-size:0.9em;">
+        结果层层返回 → <span class="hl">Gateway</span> → 送达用户
+      </p>
+    </div>
+    
+    <hr class="divider">
+    
+    <div class="grid-4 fade-in">
+      <div class="card">
+        <h3><span class="icon">🌅</span> 早晨</h3>
+        <p style="font-size:0.85em;">9:00 热点推送 → 你收到每日资讯</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🌙</span> 深夜</h3>
+        <p style="font-size:0.85em;">3:00 Dreaming → 记忆自动整合</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">💬</span> 随时</h3>
+        <p style="font-size:0.85em;">你发消息 → Agent理解 → Skills执行 → 你收到回复</p>
+      </div>
+      <div class="card">
+        <h3><span class="icon">🔄</span> 持续</h3>
+        <p style="font-size:0.85em;">Memory积累 → 越用越懂你</p>
+      </div>
+    </div>
+    
+  </div>
+  <div class="page-num">08 / 09</div>
+</section>
+
+<!-- 结束页 -->
+<section class="slide slide-cover" style="background:linear-gradient(135deg,#1a1a3e 0%,#0f0f2f 100%);">
+  <div class="grid-bg"></div>
+  <h1 style="font-size:3em;">下一步</h1>
+  <div class="subtitle">你想深入哪个模块？</div>
+  <div class="parts" style="margin-top:30px;">
+    <span class="part-tag">深入Gateway</span>
+    <span class="part-tag">深入Agent</span>
+    <span class="part-tag">深入Memory</span>
+    <span class="part-tag">写一个Skill</span>
+    <span class="part-tag">配置Cron任务</span>
+  </div>
+  <div class="page-num">09 / 09</div>
+</section>
+
+<!-- 导航脚本 -->
+<script>
+window.addEventListener('scroll', () => {
+  const links = document.querySelectorAll('nav .nav-links a');
+  const sections = document.querySelectorAll('section[id]');
+  let current = '';
+  sections.forEach(s => { const top = s.offsetTop; if (scrollY >= top - 200) current = s.getAttribute('id'); });
+  links.forEach(l => { l.classList.remove('active'); if (l.getAttribute('href') === '#' + current) l.classList.add('active'); });
+});
+</script>
+
+</body>
+</html>
